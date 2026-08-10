@@ -191,7 +191,10 @@ export default function Dashboard({ user, onLogout }) {
       <Layout user={user} onLogout={onLogout}>
         <div className="page-enter page-enter-active">
           <header className="dashboard-header">
-            <h2 className="section-title">Doctor Command Center</h2>
+            <h2 className="section-title">
+              Doctor Command Center
+              {user?.org_name && <span style={{ fontWeight: 400, fontSize: '0.9rem', marginLeft: '0.5rem', color: 'var(--color-text-muted)' }}>— {user.org_name}</span>}
+            </h2>
             <p className="dashboard-subtitle">Live clinical queues, workflow, and patient care actions</p>
           </header>
 
@@ -286,7 +289,10 @@ export default function Dashboard({ user, onLogout }) {
     <Layout user={user} onLogout={onLogout}>
       <div className="page-enter page-enter-active">
         <header className="dashboard-header">
-          <h2 className="section-title">Dashboard</h2>
+          <h2 className="section-title">
+            Dashboard
+            {user?.org_name && <span style={{ fontWeight: 400, fontSize: '0.95rem', marginLeft: '0.5rem', color: 'var(--color-text-muted)' }}>— {user.parent_name && user.org_kind === 'branch' ? `${user.parent_name} → ` : ''}{user.org_name}</span>}
+          </h2>
           <p className="dashboard-subtitle">
             {isAdmin ? 'Overview and analytics' : 'Your overview'}
           </p>

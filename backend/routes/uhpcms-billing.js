@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/auth');
 const { requireModule } = require('../middleware/requireModule');
 const { requireOrgActive } = require('../middleware/orgCheck');
 const { requireOrgContext } = require('../middleware/requireOrgContext');
+const { getOrgBranding } = require('../lib/permissions');
 const ids = require('../lib/ids');
 
 const router = express.Router();
@@ -154,7 +155,8 @@ router.get('/invoices/:id', async (req, res) => {
       'SELECT id, amount, currency, method, reference, created_at FROM payments WHERE invoice_id = $1 ORDER BY created_at',
       [inv.id]
     );
-    res.json({ ok: true, data: { ...inv, charges: charges || [], payments: payments || [] } });
+    const branding = (await getOrgBranding(inv.org_id)) || {};
+    res.json({ ok: true, data: { ...inv, charges: charges || [], payments: payments || [], branding } });
   } catch (e) {
     res.status(500).json({ ok: false, message: e.message });
   }
@@ -172,7 +174,8 @@ router.get('/payments/:id', async (req, res) => {
     );
     const p = Array.isArray(row) ? row[0] : row;
     if (!p) return res.status(404).json({ ok: false, message: 'Payment not found' });
-    res.json({ ok: true, data: p });
+    const branding = (await getOrgBranding(p.org_id)) || {};
+    res.json({ ok: true, data: { ...p, branding } });
   } catch (e) {
     res.status(500).json({ ok: false, message: e.message });
   }

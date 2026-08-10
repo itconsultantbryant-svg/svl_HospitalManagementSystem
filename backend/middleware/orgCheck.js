@@ -1,23 +1,26 @@
 const db = require('../db');
 
-async function resolveSingleHospitalOrgId() {
-  const row = await db.get("SELECT id FROM organizations WHERE type = $1 ORDER BY created_at ASC LIMIT 1", ['hospital']);
-  if (row?.id) return row.id;
-  const fallback = await db.get('SELECT id FROM organizations ORDER BY created_at ASC LIMIT 1');
-  return fallback?.id || null;
-}
-
+/**
+ * Resolve the org context for a request. Order of precedence:
+ *  1. req.orgId (already resolved)
+ *  2. req.user.org_id (JWT — the user's own organization)
+ *  3. Explicit org selector (query ?org_id=, body org_id, header X-Org-Id)
+ *     — used by super_admin to operate across organizations.
+ *
+ * Multi-tenant mode: there is NO implicit "default hospital". A user without
+ * an org context stays org-less (super_admin) unless one is supplied.
+ */
 async function ensureOrgContext(req) {
   if (req?.orgId) return req.orgId;
   if (req?.user?.org_id) {
     req.orgId = req.user.org_id;
     return req.orgId;
   }
-  const orgId = await resolveSingleHospitalOrgId();
-  if (orgId) {
-    if (req?.user) req.user.org_id = orgId;
-    req.orgId = orgId;
-    return orgId;
+  const explicit = req?.query?.org_id || req?.body?.org_id || req?.headers?.['x-org-id'];
+  if (explicit) {
+    req.orgId = explicit;
+    if (req.user) req.user.org_id = explicit;
+    return explicit;
   }
   if (req) req.orgId = null;
   return null;

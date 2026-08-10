@@ -10,6 +10,9 @@ const TABS = [
   { id: 'stores', label: 'Pharmacy stores', icon: '💊' },
   { id: 'services', label: 'Services (billing)', icon: '📋' },
   { id: 'users', label: 'Users', icon: '👤' },
+  { id: 'roles', label: 'Roles & Permissions', icon: '🎭' },
+  { id: 'branches', label: 'Branches', icon: '🏥' },
+  { id: 'branding', label: 'Branding', icon: '🎨' },
 ];
 
 export default function OrgAdmin({ user, onLogout }) {
@@ -31,6 +34,23 @@ export default function OrgAdmin({ user, onLogout }) {
   const [editingUser, setEditingUser] = useState(null);
   const [editUserForm, setEditUserForm] = useState({ email: '', full_name: '', role_id: '', status: 'active', password: '' });
   const [savingEditUser, setSavingEditUser] = useState(false);
+
+  // ---- Branding ----
+  const [branding, setBranding] = useState(null);
+  const [brandingForm, setBrandingForm] = useState({ name: '', address: '', phone: '', email: '', country: 'Liberia', website_slug: '' });
+  const [savingBranding, setSavingBranding] = useState(false);
+
+  // ---- Roles & permissions ----
+  const [permCatalog, setPermCatalog] = useState([]);
+  const [permGrouped, setPermGrouped] = useState({});
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [rolePerms, setRolePerms] = useState([]);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [savingRole, setSavingRole] = useState(false);
+
+  // ---- Branches ----
+  const [branches, setBranches] = useState([]);
+  const [branchForm, setBranchForm] = useState({ name: '', type: 'clinic', admin_email: '', admin_password: '', admin_name: '', address: '', phone: '' });
 
   const currentOrgId = (user?.org_id ? user.org_id : getEffectiveOrgId(user)) || orgId || organizations[0]?.id;
 
@@ -75,6 +95,39 @@ export default function OrgAdmin({ user, onLogout }) {
       setRoles(r);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [currentOrgId]);
+
+  // ---- Load branding when Branding tab opens ----
+  useEffect(() => {
+    if (tab !== 'branding' || !currentOrgId) return;
+    api.uhpcms.getOrgBranding(currentOrgId).then((r) => {
+      const d = r.data || {};
+      setBranding(d);
+      setBrandingForm({ name: d.name || '', address: d.address || '', phone: d.phone || '', email: d.email || '', country: d.country || 'Liberia', website_slug: d.website_slug || '' });
+    }).catch(() => {});
+  }, [tab, currentOrgId]);
+
+  // ---- Load permission catalog when Roles tab opens ----
+  useEffect(() => {
+    if (tab !== 'roles') return;
+    api.uhpcms.getPermsCatalog(currentOrgId).then((r) => {
+      setPermCatalog(r.data || []);
+      setPermGrouped(r.grouped || {});
+    }).catch(() => {});
+    setSelectedRole(null);
+    setRolePerms([]);
+  }, [tab, currentOrgId]);
+
+  // ---- Load role permissions when a role is selected ----
+  useEffect(() => {
+    if (!selectedRole) { setRolePerms([]); return; }
+    api.uhpcms.getRolePermissions(selectedRole.id, currentOrgId).then((r) => setRolePerms(r.data || [])).catch(() => setRolePerms([]));
+  }, [selectedRole, currentOrgId]);
+
+  // ---- Load branches when Branches tab opens ----
+  useEffect(() => {
+    if (tab !== 'branches') return;
+    api.uhpcms.getOrgBranchesSelf(currentOrgId).then((r) => setBranches(r.data || [])).catch(() => setBranches([]));
+  }, [tab, currentOrgId]);
 
   const refresh = () => {
     if (!currentOrgId) return;
@@ -197,6 +250,73 @@ export default function OrgAdmin({ user, onLogout }) {
     }
   };
 
+  // ---- Branding handlers ----
+  const handleBrandingFile = (field, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setBranding((b) => ({ ...(b || {}), [field]: reader.result }));
+    reader.readAsDataURL(file);
+  };
+  const saveBranding = async () => {
+    setSavingBranding(true);
+    setError('');
+    try {
+      const body = { ...brandingForm };
+      if (branding?.logo_base64) body.logo_base64 = branding.logo_base64;
+      if (branding?.signature_base64) body.signature_base64 = branding.signature_base64;
+      const r = await api.uhpcms.updateOrgBranding(body, currentOrgId);
+      setBranding(r.data || branding);
+      setSuccessMsg('Branding saved. Refresh to see your logo across the app.');
+    } catch (e) { setError(e.message); }
+    finally { setSavingBranding(false); }
+  };
+
+  // ---- Role handlers ----
+  const handleCreateRole = async (e) => {
+    e.preventDefault();
+    if (!newRoleName.trim()) return;
+    setSavingRole(true); setError('');
+    try {
+      await api.uhpcms.createRole({ name: newRoleName.trim() }, currentOrgId);
+      setNewRoleName('');
+      setSuccessMsg(`Role "${newRoleName.trim()}" created. Assign permissions below.`);
+      const r = await api.uhpcms.getRoles(currentOrgId);
+      setRoles(r.data || []);
+    } catch (e) { setError(e.message); }
+    finally { setSavingRole(false); }
+  };
+  const handleToggleRolePerm = async (permId) => {
+    if (!selectedRole) return;
+    const next = rolePerms.includes(permId) ? rolePerms.filter((id) => id !== permId) : [...rolePerms, permId];
+    setRolePerms(next);
+    try { await api.uhpcms.setRolePermissions(selectedRole.id, next, currentOrgId); }
+    catch (e) { setError(e.message); }
+  };
+  const handleDeleteRole = async (r) => {
+    if (!window.confirm(`Delete role "${r.name}"? This cannot be undone.`)) return;
+    setError(''); setSavingRole(true);
+    try {
+      await api.uhpcms.deleteRole(r.id, currentOrgId);
+      const res = await api.uhpcms.getRoles(currentOrgId);
+      setRoles(res.data || []);
+      setSelectedRole(null);
+    } catch (e) { setError(e.message); }
+    finally { setSavingRole(false); }
+  };
+
+  // ---- Branch handlers ----
+  const handleCreateBranch = async (e) => {
+    e.preventDefault();
+    setSavingRole(true); setError('');
+    try {
+      await api.uhpcms.createBranchSelf(branchForm, currentOrgId);
+      setSuccessMsg(`Branch "${branchForm.name}" created.`);
+      setBranchForm({ name: '', type: 'clinic', admin_email: '', admin_password: '', admin_name: '', address: '', phone: '' });
+      api.uhpcms.getOrgBranchesSelf(currentOrgId).then((r) => setBranches(r.data || [])).catch(() => {});
+    } catch (e) { setError(e.message); }
+    finally { setSavingRole(false); }
+  };
+
   return (
     <Layout user={user} onLogout={onLogout}>
       <div className="page-enter page-enter-active">
@@ -305,6 +425,153 @@ export default function OrgAdmin({ user, onLogout }) {
                   </div>
                   <button type="button" className="btn-primary" disabled={savingEditUser} onClick={saveEditUser}>Save</button>
                   <button type="button" className="btn" style={{ marginLeft: '0.5rem' }} onClick={() => setEditingUser(null)}>Cancel</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'roles' && (
+          <div className="card card-interactive">
+            <div className="card-body">
+              <h3 style={{ marginTop: 0 }}>Roles & Permissions</h3>
+              <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                Create custom roles (e.g. Head Nurse) and pick which features each role can access. Changes apply on next login.
+              </p>
+              <form onSubmit={handleCreateRole} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', maxWidth: 420 }}>
+                <input type="text" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="New role name (e.g. Head Nurse)" style={{ padding: '0.5rem', flex: 1 }} required />
+                <button type="submit" className="btn-primary" disabled={savingRole}>Create role</button>
+              </form>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1rem', alignItems: 'start' }}>
+                <div>
+                  <div className="table-wrap" style={{ maxHeight: 420, overflow: 'auto' }}>
+                    <table className="table">
+                      <thead><tr><th>Role</th><th>Users</th><th></th></tr></thead>
+                      <tbody>
+                        {roles.map((r) => (
+                          <tr key={r.id} style={selectedRole?.id === r.id ? { background: 'var(--color-primary-light, #eef4ff)' } : undefined}>
+                            <td>
+                              <button type="button" className="btn" style={{ border: 'none', background: 'transparent', padding: 0, fontWeight: selectedRole?.id === r.id ? 700 : 400 }} onClick={() => setSelectedRole(selectedRole?.id === r.id ? null : r)}>
+                                {r.name === 'accountant' ? 'Finance Manager' : (r.name || r.id).replace(/_/g, ' ')}{r.is_system ? <span style={{ fontSize: '0.7rem', opacity: 0.5, marginLeft: '0.3rem' }}>system</span> : null}
+                              </button>
+                            </td>
+                            <td>{r.user_count ?? '—'}</td>
+                            <td>{!r.is_system && <button type="button" className="btn" style={{ padding: '0.1rem 0.4rem', color: 'var(--color-danger, #c00)' }} onClick={() => handleDeleteRole(r)}>✕</button>}</td>
+                          </tr>
+                        ))}
+                        {roles.length === 0 && <tr><td colSpan={3} style={{ color: 'var(--color-text-muted)', padding: '1rem', textAlign: 'center' }}>No roles found</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div>
+                  {selectedRole ? (
+                    <>
+                      <h4 style={{ marginTop: 0 }}>Permissions — {selectedRole.name === 'accountant' ? 'Finance Manager' : (selectedRole.name || selectedRole.id).replace(/_/g, ' ')}</h4>
+                      {Object.keys(permGrouped).length === 0 && <div className="loading-state">Loading permissions…</div>}
+                      {Object.entries(permGrouped).map(([mod, perms]) => (
+                        <div key={mod} style={{ marginBottom: '0.75rem' }}>
+                          <strong style={{ textTransform: 'capitalize', fontSize: '0.85rem' }}>{mod}</strong>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.3rem' }}>
+                            {perms.map((p) => (
+                              <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.15rem 0.45rem', borderRadius: 6, background: rolePerms.includes(p.id) ? 'var(--color-primary-light, #eef4ff)' : 'transparent', border: '1px solid var(--color-border)', fontSize: '0.85rem' }}>
+                                <input type="checkbox" checked={rolePerms.includes(p.id)} onChange={() => handleToggleRolePerm(p.id)} />
+                                {p.action}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div style={{ color: 'var(--color-text-muted)', padding: '2rem', textAlign: 'center', border: '1px dashed var(--color-border)', borderRadius: 8 }}>Select a role on the left to edit its permissions</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'branches' && (
+          <div className="card card-interactive">
+            <div className="card-body">
+              <h3 style={{ marginTop: 0 }}>Branches & Clinics</h3>
+              <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                Create branch offices or clinics under this hospital. Each branch can have its own admin and inherits this hospital's module settings.
+              </p>
+              <form onSubmit={handleCreateBranch} style={{ display: 'grid', gap: '0.5rem', maxWidth: 420, marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="text" value={branchForm.name} onChange={(e) => setBranchForm((f) => ({ ...f, name: e.target.value }))} placeholder="Branch name" style={{ padding: '0.5rem', flex: 1 }} required />
+                  <select value={branchForm.type} onChange={(e) => setBranchForm((f) => ({ ...f, type: e.target.value }))} style={{ padding: '0.5rem' }}>
+                    <option value="branch">Branch</option>
+                    <option value="clinic">Clinic</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="text" value={branchForm.admin_name} onChange={(e) => setBranchForm((f) => ({ ...f, admin_name: e.target.value }))} placeholder="Branch admin name (optional)" style={{ padding: '0.5rem', flex: 1 }} />
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="email" value={branchForm.admin_email} onChange={(e) => setBranchForm((f) => ({ ...f, admin_email: e.target.value }))} placeholder="Branch admin email (optional)" style={{ padding: '0.5rem', flex: 1 }} />
+                  <input type="password" value={branchForm.admin_password} onChange={(e) => setBranchForm((f) => ({ ...f, admin_password: e.target.value }))} placeholder="Password" style={{ padding: '0.5rem', flex: 1 }} />
+                </div>
+                <button type="submit" className="btn-primary" disabled={savingRole}>Create branch</button>
+              </form>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead><tr><th>Name</th><th>Kind</th><th>Status</th><th>ID</th></tr></thead>
+                  <tbody>
+                    {branches.map((b) => <tr key={b.id}><td>{b.name}</td><td><span className="badge">{b.kind || b.type}</span></td><td>{b.status}</td><td>{b.id}</td></tr>)}
+                    {branches.length === 0 && <tr><td colSpan={4} style={{ color: 'var(--color-text-muted)', padding: '1rem', textAlign: 'center' }}>No branches yet. Create one above.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'branding' && (
+          <div className="card card-interactive">
+            <div className="card-body">
+              <h3 style={{ marginTop: 0 }}>Branding</h3>
+              <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                Upload your hospital logo and institutional signature. The logo appears on the sidebar, login page, and printed receipts; the signature appears on invoices.
+              </p>
+              {!branding && <div className="loading-state">Loading branding…</div>}
+              {branding && (
+                <div style={{ display: 'grid', gap: '1rem', maxWidth: 640 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                    <div>
+                      <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Hospital Logo</strong>
+                      {branding.logo_base64 ? (
+                        <img src={branding.logo_base64} alt="logo" style={{ width: 90, height: 90, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--color-border)', background: '#fff' }} />
+                      ) : (
+                        <div style={{ width: 90, height: 90, borderRadius: 8, border: '2px dashed var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>No logo</div>
+                      )}
+                      <input type="file" accept="image/*" onChange={(e) => handleBrandingFile('logo_base64', e.target.files?.[0])} style={{ display: 'block', marginTop: '0.5rem', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Institutional Signature</strong>
+                      {branding.signature_base64 ? (
+                        <img src={branding.signature_base64} alt="signature" style={{ height: 70, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--color-border)', background: '#fff' }} />
+                      ) : (
+                        <div style={{ width: 200, height: 70, borderRadius: 8, border: '2px dashed var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>No signature</div>
+                      )}
+                      <input type="file" accept="image/*" onChange={(e) => handleBrandingFile('signature_base64', e.target.files?.[0])} style={{ display: 'block', marginTop: '0.5rem', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gap: '0.5rem' }}>
+                    <label>Hospital name <input type="text" value={brandingForm.name} onChange={(e) => setBrandingForm((f) => ({ ...f, name: e.target.value }))} style={{ padding: '0.5rem', width: '100%' }} /></label>
+                    <label>Address <input type="text" value={brandingForm.address} onChange={(e) => setBrandingForm((f) => ({ ...f, address: e.target.value }))} style={{ padding: '0.5rem', width: '100%' }} /></label>
+                    <label>Phone <input type="text" value={brandingForm.phone} onChange={(e) => setBrandingForm((f) => ({ ...f, phone: e.target.value }))} style={{ padding: '0.5rem', width: '100%' }} /></label>
+                    <label>Institutional Email <input type="email" value={brandingForm.email} onChange={(e) => setBrandingForm((f) => ({ ...f, email: e.target.value }))} placeholder="info@hospital.org" style={{ padding: '0.5rem', width: '100%' }} /></label>
+                    <label>Country <input type="text" value={brandingForm.country} onChange={(e) => setBrandingForm((f) => ({ ...f, country: e.target.value }))} style={{ padding: '0.5rem', width: '100%' }} /></label>
+                    <label>Website Slug <input type="text" value={brandingForm.website_slug} onChange={(e) => setBrandingForm((f) => ({ ...f, website_slug: e.target.value }))} placeholder="e.g. stmary (public URL: /h/stmary)" style={{ padding: '0.5rem', width: '100%' }} /></label>
+                  </div>
+                  <div>
+                    <button type="button" className="btn-primary" disabled={savingBranding} onClick={saveBranding}>{savingBranding ? 'Saving…' : 'Save branding'}</button>
+                  </div>
                 </div>
               )}
             </div>

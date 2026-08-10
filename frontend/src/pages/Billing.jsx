@@ -160,6 +160,10 @@ export default function Billing({ user, onLogout }) {
     try {
       const r = await api.uhpcms.getInvoice(invoiceId);
       const inv = r.data;
+      const b = inv.branding || {};
+      const logoHtml = b.logo ? `<img src="${b.logo}" alt="logo" style="height:56px;object-fit:contain;border-radius:6px;background:#fff;padding:2px">` : '';
+      const sigHtml = b.signature ? `<img src="${b.signature}" alt="signature" style="height:40px;object-fit:contain;border-radius:4px;border:1px solid #ddd;background:#fff">` : '';
+      const orgInfo = b.name ? `<strong>${b.name}</strong>${b.address ? `<br>${b.address}` : ''}${b.phone ? `<br>${b.phone}${b.country ? ', ' + b.country : ''}` : ''}` : '';
       const win = window.open('', '_blank');
       win.document.write(`
         <!DOCTYPE html><html><head><title>Invoice ${inv.id}</title><style>
@@ -167,8 +171,14 @@ export default function Billing({ user, onLogout }) {
           table{width:100%;border-collapse:collapse;margin:1rem 0}
           th,td{border:1px solid #ddd;padding:8px;text-align:left}
           .total{font-weight:bold;font-size:1.1rem}
+          .inv-header{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:1rem}
+          .inv-org-info{font-size:0.85rem;line-height:1.4}
+          .inv-footer{margin-top:2rem;display:flex;justify-content:space-between;align-items:flex-end}
         </style></head><body>
-        <h2>INVOICE</h2>
+        <div class="inv-header">
+          <div>${logoHtml}<h2 style="margin-top:0.25rem">INVOICE</h2></div>
+          <div class="inv-org-info">${orgInfo}</div>
+        </div>
         <p><strong>Invoice ID:</strong> ${inv.id} &nbsp; <strong>Encounter:</strong> ${inv.encounter_id} &nbsp; <strong>Patient MRN:</strong> ${inv.patient_mrn || '—'}</p>
         <p><strong>Date:</strong> ${inv.created_at} &nbsp; <strong>Status:</strong> ${inv.status}</p>
         <table><thead><tr><th>Code</th><th>Description</th><th>Amount</th></tr></thead><tbody>
@@ -176,6 +186,7 @@ export default function Billing({ user, onLogout }) {
         </tbody></table>
         <p class="total">Total: ${formatMoney(inv.total_amount, inv.currency)}</p>
         ${(inv.payments || []).length ? `<p>Payments: ${(inv.payments || []).map((p) => `${formatMoney(p.amount, p.currency)} (${(p.method || 'cash').replace(/_/g, ' ')})`).join(', ')}</p>` : ''}
+        ${sigHtml ? `<div class="inv-footer"><div></div><div style="text-align:center;font-size:0.8rem">${sigHtml}<br>Authorised Signature</div></div>` : ''}
         <p style="marginTop:2rem"><button onclick="window.print()">Print</button> <button onclick="window.close()">Close</button></p>
         </body></html>`);
       win.document.close();
@@ -189,6 +200,9 @@ export default function Billing({ user, onLogout }) {
       const r = await api.uhpcms.getPayment(paymentId);
       const p = r.data;
       const methodLabel = (p.method || 'cash').replace(/_/g, ' ');
+      const b = p.branding || {};
+      const logoHtml = b.logo ? `<img src="${b.logo}" alt="logo" style="height:48px;object-fit:contain;border-radius:6px;background:#fff;padding:2px">` : '';
+      const orgHeader = b.name ? `<div style="margin-bottom:0.5rem">${logoHtml}<br><strong>${b.name}</strong>${b.address ? `<br><span style="font-size:0.8rem">${b.address}</span>` : ''}</div>` : (logoHtml ? `<div style="margin-bottom:0.5rem">${logoHtml}</div>` : '');
       const win = window.open('', '_blank');
       win.document.write(`
         <!DOCTYPE html><html><head><title>Receipt ${p.id}</title><style>
@@ -198,6 +212,7 @@ export default function Billing({ user, onLogout }) {
           .row{display:flex;justify-content:space-between;margin:0.5rem 0}
         </style></head><body>
         <div class="receipt">
+          ${orgHeader}
           <h3 class="center">PAYMENT RECEIPT</h3>
           <div class="row"><span>Receipt #</span><span>${p.id}</span></div>
           <div class="row"><span>Date</span><span>${p.created_at}</span></div>

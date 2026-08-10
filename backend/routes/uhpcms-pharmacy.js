@@ -90,7 +90,7 @@ router.patch('/prescriptions/:id/dispense', audit('pharmacy', 'dispense'), async
     const { store_id } = req.body || {};
     const dispensedBy = req.user?.sub || req.user?.id;
     await db.run(
-      'UPDATE prescriptions SET status = $1, store_id = $2, dispensed_at = datetime(\'now\'), dispensed_by = $3 WHERE id = $4',
+      `UPDATE prescriptions SET status = $1, store_id = $2, dispensed_at = ${db.NOW}, dispensed_by = $3 WHERE id = $4`,
       ['dispensed', store_id || null, dispensedBy, id]
     );
     res.json({ ok: true });
@@ -119,7 +119,7 @@ router.post('/inventory', audit('pharmacy', 'update_inventory'), async (req, res
     if (!store_id || !drug_id || quantity == null) return res.status(400).json({ ok: false, message: 'store_id, drug_id, quantity required' });
     const existing = await db.get('SELECT id, quantity FROM pharmacy_inventory WHERE store_id = $1 AND drug_id = $2 AND (batch = $3 OR (batch IS NULL AND $3 IS NULL))', [store_id, drug_id, batch || null]);
     if (existing) {
-      await db.run('UPDATE pharmacy_inventory SET quantity = quantity + $1, updated_at = datetime(\'now\') WHERE id = $2', [Number(quantity), existing.id]);
+      await db.run(`UPDATE pharmacy_inventory SET quantity = quantity + $1, updated_at = ${db.NOW} WHERE id = $2`, [Number(quantity), existing.id]);
     } else {
       await db.run(
         'INSERT INTO pharmacy_inventory (store_id, drug_id, quantity, batch, expiry) VALUES ($1, $2, $3, $4, $5)',

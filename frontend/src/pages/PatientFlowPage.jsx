@@ -29,6 +29,8 @@ export default function PatientFlowPage({ user, onLogout }) {
   const [nextMrn, setNextMrn] = useState('MRN001');
   const [registered, setRegistered] = useState('');
   const [regDemographics, setRegDemographics] = useState({ full_name: '', date_of_birth: '', gender: '', phone: '', address: '' });
+  const [duplicates, setDuplicates] = useState([]);
+  const [duplicatesChecked, setDuplicatesChecked] = useState(false);
   const [encounterId, setEncounterId] = useState('');
   const [triageData, setTriageData] = useState({ vitals: '', severity: '', notes: '' });
   const [soapNotes, setSoapNotes] = useState('');
@@ -96,6 +98,33 @@ export default function PatientFlowPage({ user, onLogout }) {
       });
   }, [currentOrgId, shouldAllowPatientFlow, shouldAllowPharmacy]);
 
+  // Debounced duplicate-patient check while the receptionist fills the registration form.
+  useEffect(() => {
+    if (!currentOrgId || !shouldAllowPatientFlow) return;
+    const { full_name, date_of_birth, phone } = regDemographics;
+    const name = String(full_name || '').trim();
+    const dob = String(date_of_birth || '').trim();
+    const ph = String(phone || '').trim();
+    if (!name && !dob && !ph) {
+      setDuplicates([]);
+      setDuplicatesChecked(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const params = { org_id: currentOrgId };
+      if (name) params.full_name = name;
+      if (dob) params.date_of_birth = dob;
+      if (ph) params.phone = ph;
+      api.uhpcms.checkDuplicates(params)
+        .then((r) => {
+          setDuplicates(r.data || []);
+          setDuplicatesChecked(true);
+        })
+        .catch(() => {});
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [regDemographics.full_name, regDemographics.date_of_birth, regDemographics.phone, currentOrgId, shouldAllowPatientFlow]);
+
   const handleSearchPatient = async (e) => {
     e.preventDefault();
     setError('');
@@ -131,6 +160,8 @@ export default function PatientFlowPage({ user, onLogout }) {
         address: regDemographics.address || undefined,
       });
       setRegistered(mrn || nextMrn);
+      setDuplicates([]);
+      setDuplicatesChecked(false);
       const r = await api.uhpcms.getPatients({ org_id: currentOrgId });
       setPatients(r.data || []);
     } catch (err) {
@@ -273,6 +304,23 @@ export default function PatientFlowPage({ user, onLogout }) {
               {searchResult === null && searchMrn.trim() !== '' && <p style={{ color: 'var(--color-text-muted)', marginBottom: '0.5rem' }}>No patient with that MRN. Register new below.</p>}
               <hr style={{ borderColor: 'var(--color-border)', margin: '1rem 0' }} />
               <h4 style={{ marginTop: 0 }}>Register new patient</h4>
+              {duplicatesChecked && duplicates.length > 0 && (
+                <div style={{ border: '1px solid #e6a817', background: '#fff7e0', color: '#7a5a00', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '0.75rem', maxWidth: 480 }}>
+                  <strong>⚠️ Possible duplicate patients found</strong>
+                  <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+                    {duplicates.map((d) => (
+                      <li key={d.id}>
+                        <button type="button" onClick={() => navigate(`/patients/${d.id}`)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary, #1a6fb5)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>
+                          {d.full_name || 'Unknown'} (MRN {d.mrn})
+                        </button>
+                        {d.date_of_birth ? ` · DOB ${d.date_of_birth}` : ''}
+                        {d.phone ? ` · ${d.phone}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem' }}>Please verify before proceeding — you can still register if this is a new patient.</p>
+                </div>
+              )}
               <form onSubmit={handleRegister} style={{ display: 'grid', gap: '0.5rem', maxWidth: 480 }}>
                 <label>MRN (auto: {nextMrn})<input type="text" value={mrn} onChange={(e) => setMrn(e.target.value)} placeholder={nextMrn} style={{ display: 'block', padding: '0.5rem', width: '100%' }} /></label>
                 <p style={{ margin: '0.25rem 0', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>Optional demographics</p>

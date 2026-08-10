@@ -144,6 +144,15 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 1.25rem;
 }
 
+.sidebar-brand-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #fff;
+  padding: 2px;
+}
+
 .sidebar-nav {
   flex: 1;
   padding: 0.75rem 0;
@@ -410,6 +419,38 @@ button { font-family: inherit; cursor: pointer; }
   height: 8px;
   border-radius: 50%;
   background: var(--color-danger, #dc2626);
+}
+.header-notification-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid var(--color-surface);
+}
+.header-notification-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid var(--color-surface);
 }
 
 .header-dropdown {
@@ -741,6 +782,64 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--color-text-muted);
   font-size: 0.9375rem;
   margin-bottom: 1.5rem;
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.login-brand .login-title {
+  margin-bottom: 0.125rem;
+}
+
+.login-brand .login-subtitle {
+  margin-bottom: 0.25rem;
+}
+
+.login-logo-img,
+.login-logo-fallback {
+  border-radius: var(--radius-lg);
+  object-fit: contain;
+  margin-bottom: 0.75rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.login-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #0e7490 100%);
+  letter-spacing: 0.02em;
+}
+
+.login-org-note {
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary, #0d9488);
+  margin: 0.125rem 0 0 0;
+}
+
+.login-brand-spinner {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: login-spin 0.7s linear infinite;
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
 }
 
 .login-form label {

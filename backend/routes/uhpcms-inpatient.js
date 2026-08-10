@@ -55,10 +55,10 @@ router.post('/admissions/:id/discharge', audit('inpatient', 'discharge'), async 
     const adm = await db.get('SELECT encounter_id FROM admissions WHERE id = $1', [id]);
     if (!adm) return res.status(404).json({ ok: false, message: 'Admission not found' });
     await db.run(
-      'UPDATE admissions SET discharged_at = datetime(\'now\'), discharged_by = $1 WHERE id = $2',
+      `UPDATE admissions SET discharged_at = ${db.NOW}, discharged_by = $1 WHERE id = $2`,
       [dischargedBy, id]
     );
-    await db.run('UPDATE encounters SET status = $1, closed_at = datetime(\'now\') WHERE id = $2', ['discharged', adm.encounter_id]);
+    await db.run(`UPDATE encounters SET status = $1, closed_at = ${db.NOW} WHERE id = $2`, ['discharged', adm.encounter_id]);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, message: e.message });

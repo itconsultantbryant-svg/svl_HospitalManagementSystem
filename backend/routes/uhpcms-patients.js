@@ -68,6 +68,41 @@ router.get('/', requireOrgContext, async (req, res) => {
   }
 });
 
+// GET /duplicates?full_name=&date_of_birth=&phone= - possible duplicate patients at registration
+router.get('/duplicates', requireOrgContext, async (req, res) => {
+  try {
+    const org_id = req.orgId;
+    const { full_name, date_of_birth, phone } = req.query;
+    if (!org_id) return res.status(400).json({ ok: false, message: 'org_id required' });
+    const conditions = [];
+    const params = [org_id];
+    let hasSignal = false;
+    if (full_name && String(full_name).trim()) {
+      hasSignal = true;
+      params.push(`%${String(full_name).trim()}%`);
+      conditions.push(`LOWER(full_name) LIKE LOWER($${params.length})`);
+    }
+    if (phone && String(phone).trim()) {
+      hasSignal = true;
+      params.push(String(phone).trim());
+      conditions.push(`phone = $${params.length}`);
+    }
+    if (date_of_birth && String(date_of_birth).trim()) {
+      hasSignal = true;
+      params.push(String(date_of_birth).trim());
+      conditions.push(`date_of_birth = $${params.length}`);
+    }
+    if (!hasSignal) return res.json({ ok: true, data: [] });
+    const sql = `SELECT id, mrn, full_name, date_of_birth, gender, phone, created_at
+      FROM patient_org WHERE org_id = $1 AND (${conditions.join(' OR ')})
+      ORDER BY created_at DESC LIMIT 5`;
+    const rows = await db.query(sql, params);
+    res.json({ ok: true, data: rows });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
 // GET /by-mrn?org_id=&mrn= - full record by org + mrn
 router.get('/by-mrn', requireOrgContext, audit('patient', 'view'), async (req, res) => {
   try {

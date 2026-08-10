@@ -12,6 +12,10 @@ export default function Search({ user, onLogout }) {
   const [patients, setPatients] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [notices, setNotices] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [encounters, setEncounters] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [legacyEmployees, setLegacyEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,6 +24,10 @@ export default function Search({ user, onLogout }) {
       setPatients([]);
       setEmployees([]);
       setNotices([]);
+      setDepartments([]);
+      setEncounters([]);
+      setInvoices([]);
+      setLegacyEmployees([]);
       return;
     }
     let cancelled = false;
@@ -31,9 +39,21 @@ export default function Search({ user, onLogout }) {
         setPatients(d.patients || []);
         setEmployees(d.users || []);
         setNotices(d.notices || []);
+        setDepartments(d.departments || []);
+        setEncounters(d.encounters || []);
+        setInvoices(d.invoices || []);
+        setLegacyEmployees(d.legacy_employees || []);
       })
       .catch(() => {
-        if (!cancelled) setPatients([]), setEmployees([]), setNotices([]);
+        if (!cancelled) {
+          setPatients([]);
+          setEmployees([]);
+          setNotices([]);
+          setDepartments([]);
+          setEncounters([]);
+          setInvoices([]);
+          setLegacyEmployees([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -42,7 +62,14 @@ export default function Search({ user, onLogout }) {
   }, [q, orgId]);
 
   const showResults = q && !loading;
-  const hasResults = (patients?.length > 0) || (employees?.length > 0) || (notices?.length > 0);
+  const hasResults =
+    (patients?.length > 0) ||
+    (employees?.length > 0) ||
+    (notices?.length > 0) ||
+    (departments?.length > 0) ||
+    (encounters?.length > 0) ||
+    (invoices?.length > 0) ||
+    (legacyEmployees?.length > 0);
 
   return (
     <Layout user={user} onLogout={onLogout}>
@@ -117,6 +144,116 @@ export default function Search({ user, onLogout }) {
                             <td>{e.full_name || '—'}</td>
                             <td><span className="badge">{(e.role_id || '').replace('role_', '')}</span></td>
                             <td><Link to="/doctors" className="btn btn--sm btn-primary">View list</Link></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {departments?.length > 0 && (
+              <section className="section">
+                <h3 className="section-title">Departments ({departments.length})</h3>
+                <div className="card" style={{ padding: '1rem' }}>
+                  <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                    {departments.map((d) => (
+                      <li key={d.id} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--color-border)' }}>
+                        <strong>{d.name}</strong>
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <Link to="/departments" className="btn btn--sm btn-primary">Open departments</Link>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {encounters?.length > 0 && (
+              <section className="section">
+                <h3 className="section-title">Encounters ({encounters.length})</h3>
+                <div className="card">
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>MRN</th>
+                          <th>Status</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {encounters.map((e) => (
+                          <tr key={e.id}>
+                            <td><strong>{e.id}</strong></td>
+                            <td>{e.patient_mrn || '—'}</td>
+                            <td><span className="badge">{e.status}</span></td>
+                            <td>
+                              <Link to={`/billing?tab=workflow&encounter_id=${encodeURIComponent(e.id)}`} className="btn btn--sm btn-primary">Open billing</Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {invoices?.length > 0 && (
+              <section className="section">
+                <h3 className="section-title">Invoices ({invoices.length})</h3>
+                <div className="card">
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Invoice</th>
+                          <th>Encounter</th>
+                          <th>Status</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoices.map((i) => (
+                          <tr key={i.id}>
+                            <td><strong>{i.id}</strong></td>
+                            <td>{i.encounter_id}</td>
+                            <td><span className="badge">{i.status}</span></td>
+                            <td><Link to="/billing?tab=invoices" className="btn btn--sm btn-primary">Open invoices</Link></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {legacyEmployees?.length > 0 && (
+              <section className="section">
+                <h3 className="section-title">Legacy employees ({legacyEmployees.length})</h3>
+                <div className="card">
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>EID</th>
+                          <th>Name</th>
+                          <th>Role</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {legacyEmployees.map((e) => (
+                          <tr key={e.eid}>
+                            <td><strong>{e.eid}</strong></td>
+                            <td>{[e.firstName, e.lastName].filter(Boolean).join(' ') || '—'}</td>
+                            <td><span className="badge">{e.role}</span></td>
+                            <td><Link to="/employees" className="btn btn--sm btn-primary">Open employees</Link></td>
                           </tr>
                         ))}
                       </tbody>

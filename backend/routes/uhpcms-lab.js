@@ -62,7 +62,7 @@ router.patch('/:id/result', audit('lab', 'submit_result'), async (req, res) => {
     const { result_value, result_unit } = req.body || {};
     const resultBy = req.user?.sub || req.user?.id;
     await db.run(
-      'UPDATE lab_orders SET result_value = $1, result_unit = $2, result_at = datetime(\'now\'), result_by = $3, status = $4 WHERE id = $5',
+      `UPDATE lab_orders SET result_value = $1, result_unit = $2, result_at = ${db.NOW}, result_by = $3, status = $4 WHERE id = $5`,
       [result_value || null, result_unit || null, resultBy, 'result_ready', id]
     );
     res.json({ ok: true });

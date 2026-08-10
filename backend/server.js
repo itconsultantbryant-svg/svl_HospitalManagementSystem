@@ -41,6 +41,8 @@ const uhpcmsInsurance = require('./routes/uhpcms-insurance');
 const uhpcmsChat = require('./routes/uhpcms-chat');
 const uhpcmsDocuments = require('./routes/uhpcms-documents');
 const uhpcmsSearch = require('./routes/uhpcms-search');
+const uhpcmsPublic = require('./routes/uhpcms-public');
+const { seedPermissions } = require('./scripts/seed-permissions');
 
 const app = express();
 // CORS: allow single origin (string), array of origins, or true for all
@@ -80,6 +82,7 @@ app.use('/api/uhpcms/insurance', uhpcmsInsurance);
 app.use('/api/uhpcms/chat', uhpcmsChat);
 app.use('/api/uhpcms/documents', uhpcmsDocuments);
 app.use('/api/uhpcms/search', uhpcmsSearch);
+app.use('/api/uhpcms/public', uhpcmsPublic);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, db: config.dbType });
@@ -87,6 +90,11 @@ app.get('/api/health', (req, res) => {
 
 async function start() {
   await db.init();
+  try {
+    await seedPermissions();
+  } catch (e) {
+    console.error('Permission seed failed (continuing):', e.message);
+  }
   const server = app.listen(config.port, () => {
     console.log(`Hospital Management API running at http://localhost:${config.port} (DB: ${config.dbType})`);
   });

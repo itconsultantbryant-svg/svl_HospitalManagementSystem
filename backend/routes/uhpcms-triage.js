@@ -28,7 +28,7 @@ router.put('/:encounterId', audit('triage', 'record'), async (req, res) => {
     const vitalsStr = typeof vitals === 'string' ? vitals : (vitals ? JSON.stringify(vitals) : null);
     if (existing) {
       await db.run(
-        'UPDATE triage SET vitals = $1, severity = $2, notes = $3, recorded_by = $4, recorded_at = datetime(\'now\') WHERE encounter_id = $5',
+        `UPDATE triage SET vitals = $1, severity = $2, notes = $3, recorded_by = $4, recorded_at = ${db.NOW} WHERE encounter_id = $5`,
         [vitalsStr, severity || null, notes || null, recordedBy, encounterId]
       );
     } else {

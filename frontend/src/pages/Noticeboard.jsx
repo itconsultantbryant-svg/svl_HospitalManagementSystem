@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Layout from '../Layout';
 import { api } from '../api';
 import { getEffectiveOrgId } from '../utils/org';
 
 export default function Noticeboard({ user, onLogout }) {
+  const [searchParams] = useSearchParams();
+  const filter = (searchParams.get('filter') || '').toLowerCase();
   const orgId = getEffectiveOrgId(user);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +26,11 @@ export default function Noticeboard({ user, onLogout }) {
     const interval = setInterval(fetchList, 30000);
     return () => clearInterval(interval);
   }, [orgId]);
+
+  const visibleList = useMemo(() => {
+    if (filter === 'recent') return (list || []).filter((n) => !n.is_pinned);
+    return list || [];
+  }, [list, filter]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -61,8 +69,8 @@ export default function Noticeboard({ user, onLogout }) {
         <div className="card">
           {loading ? <p style={{ padding: '1.5rem', margin: 0 }}>Loading…</p> : (
             <div style={{ padding: '1rem' }}>
-              {list.length === 0 ? <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>No notices yet.</p> : (
-                list.map((n) => (
+              {visibleList.length === 0 ? <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>No notices yet.</p> : (
+                visibleList.map((n) => (
                   <div key={n.id} className="flow-step" style={{ marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>

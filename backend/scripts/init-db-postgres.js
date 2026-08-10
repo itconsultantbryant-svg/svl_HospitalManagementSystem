@@ -1,17 +1,61 @@
+/**
+ * Full initializer for PostgreSQL: legacy schema + seed + all U-HPCMS versions + super-admin.
+ * Safe to run multiple times (all statements use IF NOT EXISTS / ON CONFLICT).
+ *
+ * Loads in dependency order:
+ *   schema-postgres → seed-postgres → schema-uhpcms-postgres →
+ *   entity-docs → v2 → v3 → v4 → v5 → v6 → v7
+ *
+ * Usage:
+ *   DATABASE_URL="postgres://..." node scripts/init-db-postgres.js
+ */
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
 const bcrypt = require('bcryptjs');
 const config = require('../config');
 
-const schemaPath = path.join(__dirname, '..', 'database', 'schema-postgres.sql');
-const seedPath = path.join(__dirname, '..', 'database', 'seed-postgres.sql');
-const schemaUhpcmsPath = path.join(__dirname, '..', 'database', 'schema-uhpcms-postgres.sql');
-const schemaEntityDocsPath = path.join(__dirname, '..', 'database', 'schema-uhpcms-entity-docs-postgres.sql');
-const schema = fs.readFileSync(schemaPath, 'utf8');
-const seed = fs.readFileSync(seedPath, 'utf8');
-const schemaUhpcms = fs.readFileSync(schemaUhpcmsPath, 'utf8');
-const schemaEntityDocs = fs.existsSync(schemaEntityDocsPath) ? fs.readFileSync(schemaEntityDocsPath, 'utf8') : null;
+const DB_DIR = path.join(__dirname, '..', 'database');
+
+// Ordered list of schema files to apply.
+const SCHEMA_FILES = [
+  'schema-postgres.sql',
+  'seed-postgres.sql',
+  'schema-uhpcms-postgres.sql',
+  'schema-uhpcms-entity-docs-postgres.sql',
+  'schema-uhpcms-v2-postgres.sql',
+  'schema-uhpcms-v3-postgres.sql',
+  'schema-uhpcms-v4-postgres.sql',
+  'schema-uhpcms-v5-postgres.sql',
+  'schema-uhpcms-v6-postgres.sql',
+  'schema-uhpcms-v7-postgres.sql',
+].filter((name) => fs.existsSync(path.join(DB_DIR, name)));
+
+/**
+ * Execute a .sql file. Tries the whole file in one query first (works for most
+ * CREATE TABLE batches); if the driver rejects multi-statement input, falls back
+ * to splitting on `;` and running each non-empty statement separately.
+ */
+async function execSqlFile(client, file, label) {
+  const sql = fs.readFileSync(file, 'utf8');
+  if (!sql.trim()) return;
+  try {
+    await client.query(sql);
+  } catch (e) {
+    if (String(e.message || '').toLowerCase().includes('another command is already in progress') ||
+        String(e.message || '').toLowerCase().includes('multiple')) {
+      // Multi-statement not supported in one call — split manually.
+      for (const stmt of sql.split(';').map((s) => s.trim()).filter(Boolean)) {
+        try { await client.query(stmt); }
+        catch (stmtErr) {
+          console.warn(`  [warn] ${label}: statement failed: ${stmtErr.message}`);
+        }
+      }
+      return;
+    }
+    throw e;
+  }
+}
 
 async function init() {
   const clientConfig = config.postgres.connectionString
@@ -25,10 +69,12 @@ async function init() {
       };
   const client = new Client(clientConfig);
   await client.connect();
-  await client.query(schema);
-  await client.query(seed);
-  await client.query(schemaUhpcms);
-  if (schemaEntityDocs) await client.query(schemaEntityDocs);
+
+  console.log('Initializing PostgreSQL database...');
+  for (const name of SCHEMA_FILES) {
+    console.log(`  -> ${name}`);
+    await execSqlFile(client, path.join(DB_DIR, name), name);
+  }
 
   // Seed U-HPCMS super-admin
   const superRoleId = 'role_super_admin';
@@ -46,7 +92,8 @@ async function init() {
   );
 
   await client.end();
-  console.log('PostgreSQL database initialized (legacy + U-HPCMS). Super-admin: super@uhpcms.local / admin123');
+  console.log('PostgreSQL database initialized (legacy + U-HPCMS v2-v7 + entity-docs).');
+  console.log('Super-admin login: super@uhpcms.local / admin123');
 }
 
 init().catch((err) => {

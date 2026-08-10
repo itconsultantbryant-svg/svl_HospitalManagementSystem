@@ -62,7 +62,20 @@ export const api = {
       request('/api/uhpcms/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
     legacyLogin: (role, username, password) =>
       request('/api/uhpcms/auth/login', { method: 'POST', body: JSON.stringify({ role, username, password }) }),
+    getMe: () => request('/api/uhpcms/auth/me', {}, true),
+    orgBranding: (params) => {
+      const qs = new URLSearchParams(params || {}).toString();
+      return request(`/api/uhpcms/auth/org-branding${qs ? `?${qs}` : ''}`);
+    },
     getSettings: () => request('/api/uhpcms/settings'),
+    publicOrgInfo: (orgId) =>
+      request(`/api/uhpcms/public/${orgId}/info`),
+    publicDepartments: (orgId) =>
+      request(`/api/uhpcms/public/${orgId}/departments`),
+    publicDoctors: (orgId) =>
+      request(`/api/uhpcms/public/${orgId}/doctors`),
+    requestPublicAppointment: (orgId, body) =>
+      request(`/api/uhpcms/public/${orgId}/appointments`, { method: 'POST', body: JSON.stringify(body) }),
     getOrganizations: () => request('/api/uhpcms/governance/organizations', {}, true),
     createOrganization: (body) =>
       request('/api/uhpcms/governance/organizations', { method: 'POST', body: JSON.stringify(body) }, true),
@@ -114,6 +127,35 @@ export const api = {
       request(`/api/uhpcms/governance/organizations/${orgId}/addons`, {}, true),
     setOrgAddons: (orgId, addons) =>
       request(`/api/uhpcms/governance/organizations/${orgId}/addons`, { method: 'PUT', body: JSON.stringify({ addons }) }, true),
+    getAddonCatalog: () =>
+      request('/api/uhpcms/governance/addon-catalog', {}, true),
+
+    getOrgBranches: (orgId) =>
+      request(`/api/uhpcms/governance/organizations/${orgId}/branches`, {}, true),
+    createBranch: (orgId, body) =>
+      request(`/api/uhpcms/governance/organizations/${orgId}/branches`, { method: 'POST', body: JSON.stringify(body) }, true),
+    patchBranch: (id, body) =>
+      request(`/api/uhpcms/governance/branches/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, true),
+    deleteBranch: (id) =>
+      request(`/api/uhpcms/governance/branches/${id}`, { method: 'DELETE' }, true),
+
+    getGovRoles: (orgId) =>
+      request(`/api/uhpcms/governance/organizations/${orgId}/roles`, {}, true),
+    createGovRole: (orgId, body) =>
+      request(`/api/uhpcms/governance/organizations/${orgId}/roles`, { method: 'POST', body: JSON.stringify(body) }, true),
+    getGovRolePermissions: (roleId) =>
+      request(`/api/uhpcms/governance/roles/${roleId}/permissions`, {}, true),
+    setGovRolePermissions: (roleId, permissionIds) =>
+      request(`/api/uhpcms/governance/roles/${roleId}/permissions`, { method: 'PUT', body: JSON.stringify({ permission_ids: permissionIds }) }, true),
+    getPermissionsCatalog: () =>
+      request('/api/uhpcms/governance/permissions', {}, true),
+
+    getGovernanceMonitor: () =>
+      request('/api/uhpcms/governance/monitor', {}, true),
+    getGovernanceAudit: (params) =>
+      request(`/api/uhpcms/governance/audit?${new URLSearchParams(params || {}).toString()}`, {}, true),
+    getGovernanceReport: () =>
+      request('/api/uhpcms/governance/report', {}, true),
 
     getGovernanceUsers: (orgId) =>
       request(`/api/uhpcms/governance/users${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, {}, true),
@@ -141,6 +183,8 @@ export const api = {
       request(`/api/uhpcms/patients/next-mrn?org_id=${orgId}`, {}, true),
     registerPatient: (body) =>
       request('/api/uhpcms/patients/register', { method: 'POST', body: JSON.stringify(body) }, true),
+    checkDuplicates: (params) =>
+      request(`/api/uhpcms/patients/duplicates?${new URLSearchParams(params).toString()}`, {}, true),
 
     getDepartments: (orgId) =>
       request(`/api/uhpcms/org-admin/departments?org_id=${orgId}`, {}, true),
@@ -165,9 +209,34 @@ export const api = {
     createUser: (body) =>
       request('/api/uhpcms/org-admin/users', { method: 'POST', body: JSON.stringify(body) }, true),
     updateUser: (orgId, userId, body) =>
-      request(`/api/uhpcms/org-admin/users/${userId}`, { method: 'PATCH', body: JSON.stringify({ ...body, ...(orgId ? { org_id: orgId } : {}) }) }, true),
+      request(`/api/uhpcms/org-admin/users/${userId}`, { method: 'PATCH', body: JSON.stringify(body) }, true),
     deleteUser: (orgId, userId) =>
       request(`/api/uhpcms/org-admin/users/${userId}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { method: 'DELETE' }, true),
+
+    getOrgBranding: (orgId) =>
+      request(`/api/uhpcms/org-admin/branding${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, {}, true),
+    updateOrgBranding: (body, orgId) =>
+      request(`/api/uhpcms/org-admin/branding${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { method: 'PUT', body: JSON.stringify(body) }, true),
+    getOrgAdminAddons: (orgId) =>
+      request(`/api/uhpcms/org-admin/addons${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, {}, true),
+    setOrgAdminAddons: (addons, orgId) =>
+      request(`/api/uhpcms/org-admin/addons${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { method: 'PUT', body: JSON.stringify({ addons }) }, true),
+
+    getOrgBranchesSelf: (orgId) =>
+      request(`/api/uhpcms/org-admin/branches${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, {}, true),
+    createBranchSelf: (body, orgId) =>
+      request(`/api/uhpcms/org-admin/branches${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { method: 'POST', body: JSON.stringify(body) }, true),
+
+    createRole: (body, orgId) =>
+      request(`/api/uhpcms/org-admin/roles${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { method: 'POST', body: JSON.stringify(body) }, true),
+    getRolePermissions: (roleId, orgId) =>
+      request(`/api/uhpcms/org-admin/roles/${roleId}/permissions${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, {}, true),
+    setRolePermissions: (roleId, permissionIds, orgId) =>
+      request(`/api/uhpcms/org-admin/roles/${roleId}/permissions${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { method: 'PUT', body: JSON.stringify({ permission_ids: permissionIds }) }, true),
+    deleteRole: (roleId, orgId) =>
+      request(`/api/uhpcms/org-admin/roles/${roleId}${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, { method: 'DELETE' }, true),
+    getPermsCatalog: (orgId) =>
+      request(`/api/uhpcms/org-admin/permissions${orgId ? `?org_id=${encodeURIComponent(orgId)}` : ''}`, {}, true),
 
     getTriage: (encounterId) =>
       request(`/api/uhpcms/triage/${encounterId}`, {}, true),

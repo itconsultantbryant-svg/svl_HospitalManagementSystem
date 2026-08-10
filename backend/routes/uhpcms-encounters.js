@@ -71,7 +71,7 @@ router.patch('/:id', requireOrgContext, async (req, res) => {
     if (triage_notes !== undefined) { n++; params.push(triage_notes); updates.push(`triage_notes = $${n}`); }
     if (soap_notes !== undefined) { n++; params.push(soap_notes); updates.push(`soap_notes = $${n}`); }
     if (referral_notes !== undefined) { n++; params.push(referral_notes); updates.push(`referral_notes = $${n}`); }
-    if (normalizedStatus === 'discharged') { updates.push('closed_at = datetime(\'now\')'); }
+    if (normalizedStatus === 'discharged') { updates.push(`closed_at = ${db.NOW}`); }
     if (!updates.length) return res.status(400).json({ ok: false, message: 'No updates provided' });
     n++; params.push(id);
     await db.run(`UPDATE encounters SET ${updates.join(', ')} WHERE id = $${n}`, params);
