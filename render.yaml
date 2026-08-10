@@ -2,19 +2,17 @@
 # https://docs.render.com/blueprint-spec
 # Connect this repo in Render Dashboard → New → Blueprint, then apply.
 #
-# After first deploy:
-#   1. Copy the backend URL (e.g., https://hms-liberia-api.onrender.com)
-#   2. Copy the frontend URL (e.g., https://hms-liberia.onrender.com)
-#   3. In backend service → Environment: set CORS_ORIGIN=<frontend-url>
-#   4. In frontend service → Environment: set VITE_API_URL=<backend-url>
-#   5. Redeploy both services (or trigger a manual deploy).
-#   6. On first backend deploy, the postDeployCommand runs init-db-postgres.js automatically.
-#      If you need to re-run: backend service → Shell → `node scripts/init-db-postgres.js`
-
-databases:
-  - name: hms-liberia-db
-    databaseName: hospital
-    plan: free
+# NOTE: The database is NOT created by this Blueprint. Render's free tier only
+# allows ONE free PostgreSQL database per account, so the Blueprint cannot create
+# one without colliding with an existing free DB. Instead:
+#   1. Create the database manually: Render Dashboard → New → PostgreSQL
+#      (name: hms-liberia-db, plan: free) — this is your one allowed free DB.
+#   2. Copy its "Internal Database URL" (hms-liberia-db → Info → Internal Database URL).
+#   3. After the Blueprint creates the API service, paste that URL into the
+#      backend service → Environment → DATABASE_URL. Also set CORS_ORIGIN.
+#   4. Redeploy the backend. The postDeployCommand runs init-db-postgres.js
+#      automatically on every deploy to create all tables + the super-admin.
+#      If you need to re-run it: backend service → Shell → `node scripts/init-db-postgres.js`
 
 services:
   # Backend API (Node.js)
@@ -33,9 +31,9 @@ services:
       - key: DB_TYPE
         value: postgres
       - key: DATABASE_URL
-        fromDatabase:
-          name: hms-liberia-db
-          property: connectionString
+        sync: false
+        # PASTE your Postgres Internal Database URL here (from the DB you created manually).
+        # Example: postgres://hospital_user:xxx@dpg-xxxx-xxxx-a.oregon-postgres.render.com/hospital
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
