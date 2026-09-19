@@ -132,10 +132,12 @@ neon dev
 
 `frontend/vercel.json` already rewrites all routes to `index.html` for React Router.
 
-After the first Vercel URL is known:
+**Live frontend:** [https://svl-hms.vercel.app/](https://svl-hms.vercel.app/)
+
+After the Vercel URL is known (or changes):
 
 1. Put that URL in `.env.neon` as `CORS_ORIGIN` / `FRONTEND_URL`  
-2. Re-run `neon deploy --env .env.neon`  
+2. Re-run `./scripts/deploy-neon.sh` (or `neon deploy --env .env.neon`)  
 3. Confirm login works from the Vercel site  
 
 ---
@@ -145,7 +147,7 @@ After the first Vercel URL is known:
 | Check | How |
 |-------|-----|
 | Backend health | `curl https://<neon-function>/api/health` |
-| Frontend | Open Vercel URL → login page |
+| Frontend | Open [https://svl-hms.vercel.app/](https://svl-hms.vercel.app/) → login page |
 | Login | `super@uhpcms.local` / `admin123` (after `init-db-postgres`) |
 | Public hospital page | `https://<vercel>/h/ORG-<id>` |
 | CORS | DevTools → Network → no CORS errors |
