@@ -9,12 +9,13 @@
     "stop:pm2": "pm2 stop uhpcms-api",
     "restart:pm2": "pm2 restart uhpcms-api",
     "dev": "node server.js",
+    "dev:neon": "neon dev",
     "init-db:sqlite": "node scripts/init-db-sqlite.js",
     "init-db:postgres": "node scripts/init-db-postgres.js",
     "init-uhpcms:postgres": "node scripts/init-uhpcms-postgres.js",
     "seed-uhpcms": "node scripts/seed-uhpcms.js"
   },
-  "engines": { "node": ">=16" },
+  "engines": { "node": ">=20" },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

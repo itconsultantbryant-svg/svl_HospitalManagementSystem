@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-// Support Render's DATABASE_URL (PostgreSQL) or build from PG_* vars
+// Prefer DATABASE_URL (Neon / Render / any hosted Postgres). Default to postgres when URL is set.
 const databaseUrl = process.env.DATABASE_URL || (function () {
   const h = process.env.PG_HOST;
   const db = process.env.PG_DATABASE;
@@ -11,7 +11,10 @@ const databaseUrl = process.env.DATABASE_URL || (function () {
   const enc = encodeURIComponent;
   return `postgres://${enc(u)}:${enc(p || '')}@${h}:${port}/${enc(db)}`;
 })();
-const usePostgres = (process.env.DB_TYPE || 'sqlite').toLowerCase() === 'postgres' && !!databaseUrl;
+
+const explicitType = (process.env.DB_TYPE || '').toLowerCase();
+// If DATABASE_URL is present, use Postgres unless explicitly forced to sqlite.
+const usePostgres = !!databaseUrl && explicitType !== 'sqlite';
 
 // Allow frontend origin(s) for CORS. Comma-separated list, or true to allow all.
 function getCorsOrigin() {
@@ -19,6 +22,13 @@ function getCorsOrigin() {
   if (!raw || raw === 'true') return true;
   const list = raw.split(',').map((s) => s.trim().replace(/\/$/, '')).filter(Boolean);
   return list.length ? list : true;
+}
+
+function needsSsl(url) {
+  if (!url) return false;
+  if (/[?&]sslmode=/i.test(url)) return true;
+  return /neon\.tech|render\.com|sslmode=require/i.test(url)
+    || /^dpg-/.test(process.env.PG_HOST || '');
 }
 
 const config = {
@@ -38,9 +48,9 @@ const config = {
   postgres: databaseUrl
     ? {
         connectionString: databaseUrl,
-        ssl: (databaseUrl.includes('render.com') || /^dpg-/.test(process.env.PG_HOST || ''))
-          ? { rejectUnauthorized: false }
-          : undefined,
+        // Neon connection strings usually include sslmode=require; keep rejectUnauthorized
+        // false for managed hosts that use intermediary certs.
+        ssl: needsSsl(databaseUrl) ? { rejectUnauthorized: false } : undefined,
       }
     : {
         host: process.env.PG_HOST || 'localhost',

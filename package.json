@@ -1,0 +1,22 @@
+{
+  "name": "uhpcms-hms",
+  "private": true,
+  "description": "U-HPCMS — Vercel frontend + Neon Functions API + Neon Postgres",
+  "scripts": {
+    "neon:link": "neon link --project-id patient-fog-47191385",
+    "neon:dev": "neon dev",
+    "neon:deploy": "neon deploy --env .env.neon",
+    "neon:env": "neon env pull --file .env.neon.local",
+    "db:init": "node backend/scripts/init-db-postgres.js",
+    "db:init:neon": "node --env-file=.env.neon.local --env-file=.env.neon backend/scripts/init-db-postgres.js"
+  },
+  "dependencies": {
+    "@neon/config": "^1.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

@@ -2,13 +2,19 @@ const { Pool } = require('pg');
 const config = require('../config');
 
 const poolConfig = config.postgres.connectionString
-  ? { connectionString: config.postgres.connectionString, ssl: config.postgres.ssl }
+  ? {
+      connectionString: config.postgres.connectionString,
+      ssl: config.postgres.ssl,
+      // Neon Functions keep a long-lived isolate — keep the pool small.
+      max: parseInt(process.env.PG_POOL_MAX || '5', 10),
+    }
   : {
       host: config.postgres.host,
       port: config.postgres.port,
       database: config.postgres.database,
       user: config.postgres.user,
       password: config.postgres.password,
+      max: parseInt(process.env.PG_POOL_MAX || '10', 10),
     };
 
 const pool = new Pool(poolConfig);

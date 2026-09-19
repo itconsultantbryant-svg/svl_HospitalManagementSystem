@@ -18,5 +18,13 @@ frontend/dist
 backend/.env
 .env
 .env.local
+.env.neon
+.env.neon.local
+.neon
 *.log
 .DS_Store
+.neon-api-b64.txt
+.neon-b64-parts/
+.neon-chunks/
+.neon-fn-deploy-tmp/
+.neon-deploy-args.json

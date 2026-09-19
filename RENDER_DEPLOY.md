@@ -1,5 +1,7 @@
 # Deploying HMS Liberia on Render
 
+> **Preferred stack:** [Vercel + Neon](./VERCEL_DEPLOY.md) (frontend on Vercel, API + Postgres on Neon Functions / Lakebase). Use this Render guide only as a legacy or temporary fallback.
+
 This guide walks you through deploying the Hospital Management System (backend API + frontend) on [Render](https://render.com).
 
 ## Option A: Blueprint (recommended)

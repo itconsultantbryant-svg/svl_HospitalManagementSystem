@@ -1,154 +1,236 @@
-# Vercel + Render Deployment Guide for U-HPCMS
+# Vercel + Neon Deployment Guide for U-HPCMS
 
 ## Architecture
-- **Frontend** (React + Vite): Deployed on **Vercel** as a static site
-- **Backend** (Node.js/Express): Deployed on **Render** as a web service with **PostgreSQL**
-- **Database**: PostgreSQL on Render (free tier)
-- **Connectivity**: HTTPS on both ends — works on all networks (Orange, Lonestar, etc.)
+
+| Layer | Platform | Role |
+|-------|----------|------|
+| **Frontend** | **Vercel** | React + Vite static SPA (CDN, preview deploys) |
+| **Backend API** | **Neon Functions** | Express API as a long-running Node.js function next to the DB |
+| **Database** | **Neon Lakebase Postgres** | Managed PostgreSQL (`DATABASE_URL` injected into the function) |
+
+Render is no longer required. Keep `render.yaml` / `RENDER_DEPLOY.md` only if you need a temporary fallback.
+
+```
+Browser → Vercel (frontend)
+              │  VITE_API_URL
+              ▼
+         Neon Function `api`  ←→  Neon Postgres (same branch)
+```
 
 ---
 
 ## Prerequisites
-- GitHub repo connected to both Vercel and Render
-- Render Blueprint (`render.yaml`) at repo root
-- Frontend `vercel.json` for SPA routing
+
+- Neon account (this repo is prepared for project **`uhpcms-hms`**, id `patient-fog-47191385`, region **`aws-us-east-2`**)
+- [Neon CLI](https://neon.com/docs/cli/install): `npm install -g neon@latest` then `neon login`
+- Vercel account + GitHub repo connected
+- Node.js **20+** (24 recommended; Functions run on Node 24)
 
 ---
 
-## 1. Deploy Backend on Render (via Blueprint)
+## 1. Neon project (Postgres + Function)
 
-1. In Render Dashboard → **New** → **Blueprint**
-2. Connect your GitHub repo
-3. Render detects `render.yaml` and proposes:
-   - Database: `hms-liberia-db` (PostgreSQL, free)
-   - Service: `hms-liberia-api` (Node.js web service)
-   - Service: `hms-liberia` (static site)
-4. Click **Apply** — this provisions the DB and starts both deploys
+### Already provisioned
 
-### What the Blueprint does automatically
-- Provisions PostgreSQL database
-- Deploys backend with `DB_TYPE=postgres` and `DATABASE_URL` from the DB
-- **Runs `postDeployCommand: node scripts/init-db-postgres.js`** on every deploy to create all schema tables (v2–v7 + entity-docs)
-- Generates `JWT_SECRET`
-- Sets `CORS_ORIGIN` to empty (you fill this in after first deploy)
-- Deploys frontend as static site with SPA rewrite (`vercel.json` + Render routes)
+| Field | Value |
+|-------|--------|
+| Project name | `uhpcms-hms` |
+| Project ID | `patient-fog-47191385` |
+| Region | `aws-us-east-2` |
+| Database | `hospital` |
+| Default branch | `main` (`br-restless-flower-b5vbdnky`) |
+
+Console: https://console.neon.tech/app/projects/patient-fog-47191385
+
+### Link the repo and pull credentials
+
+```bash
+# From repo root
+npm install
+cd backend && npm install && cd ..
+
+neon link --project-id patient-fog-47191385
+# or: npm run neon:link
+
+neon env pull --file .env.neon.local
+# Writes DATABASE_URL / DATABASE_URL_UNPOOLED for local scripts
+```
+
+### Initialize schema (once)
+
+```bash
+# Requires DATABASE_URL from .env.neon.local
+export $(grep -v '^#' .env.neon.local | xargs)   # or: npm run db:init:neon
+node backend/scripts/init-db-postgres.js
+```
+
+Idempotent — safe to re-run. Creates all tables (v2–v7 + entity-docs) and the default super-admin.
+
+### Configure deploy secrets
+
+```bash
+cp .env.neon.example .env.neon
+# Edit .env.neon:
+#   JWT_SECRET=<random 32+ chars>
+#   CORS_ORIGIN=https://<your-vercel-app>.vercel.app
+```
+
+`.env.neon` and `.env.neon.local` are gitignored.
+
+### Deploy the API function
+
+```bash
+neon auth   # if CLI token expired
+./scripts/deploy-neon.sh
+# or: neon deploy --env .env.neon
+```
+
+This applies `neon.ts` (declares function slug **`api`**) and deploys the bundled Express app from `backend/functions/api.js`.
+
+### Live invocation URL (current)
+
+```
+https://br-restless-flower-b5vbdnky-api.compute.c-7.us-east-2.aws.neon.tech
+```
+
+Health check (confirmed):
+
+```bash
+curl https://br-restless-flower-b5vbdnky-api.compute.c-7.us-east-2.aws.neon.tech/api/health
+# → { "ok": true, "db": "postgres", "platform": "neon" }
+```
+
+Re-check after a redeploy:
+
+```bash
+neon functions get api -o yaml
+```
+
+Local function dev (hot reload against the linked branch DB):
+
+```bash
+neon dev
+# API at http://localhost:8787
+```
 
 ---
 
-## 2. Configure CORS and API URLs (after first deploy)
+## 2. Frontend on Vercel
 
-Once both services are live:
+1. **Import** the GitHub repo in Vercel  
+2. **Root Directory:** `frontend`  
+3. **Framework Preset:** Vite (auto)  
+4. **Build Command:** `npm run build`  
+5. **Output Directory:** `dist`  
+6. **Environment Variables** (Production + Preview):
 
-| Service | Variable | Value |
-|---------|----------|-------|
-| Backend (`hms-liberia-api`) | `CORS_ORIGIN` | Your frontend URL, e.g. `https://hms-liberia.onrender.com` |
-| Frontend (`hms-liberia`) | `VITE_API_URL` | Your backend URL, e.g. `https://hms-liberia-api.onrender.com` |
+| Variable | Value |
+|----------|--------|
+| `VITE_API_URL` | `https://br-restless-flower-b5vbdnky-api.compute.c-7.us-east-2.aws.neon.tech` |
 
-**Then redeploy both services** (or trigger a manual deploy).
+7. **Deploy**
 
-> **Tip:** If you prefer Vercel for the frontend, set `VITE_API_URL` in Vercel project settings → Environment Variables instead.
+`frontend/vercel.json` already rewrites all routes to `index.html` for React Router.
+
+After the first Vercel URL is known:
+
+1. Put that URL in `.env.neon` as `CORS_ORIGIN` / `FRONTEND_URL`  
+2. Re-run `neon deploy --env .env.neon`  
+3. Confirm login works from the Vercel site  
 
 ---
 
-## 3. Verify the Deployment
+## 3. Verify
 
 | Check | How |
 |-------|-----|
-| Backend health | `curl https://hms-liberia-api.onrender.com/api/health` → `{ "ok": true, "db": "postgres" }` |
-| Frontend loads | Open `https://hms-liberia.onrender.com` (or Vercel URL) → Login page appears |
-| Login works | `super@uhpcms.local` / `admin123` (super-admin) |
-| Public site works | `https://hms-liberia.onrender.com/h/ORG-<id>` → branded hospital page |
-| CORS ok | Open browser DevTools → Network → no CORS errors on API calls |
+| Backend health | `curl https://<neon-function>/api/health` |
+| Frontend | Open Vercel URL → login page |
+| Login | `super@uhpcms.local` / `admin123` (after `init-db-postgres`) |
+| Public hospital page | `https://<vercel>/h/ORG-<id>` |
+| CORS | DevTools → Network → no CORS errors |
 
 ---
 
-## 4. Optional: Frontend on Vercel instead of Render Static Site
+## 4. Environment reference
 
-If you prefer Vercel for the frontend (faster global CDN, preview deployments):
+### Neon Function (`neon.ts` → `env`, set via `.env.neon` at deploy)
 
-1. **In Vercel:** Import the same GitHub repo
-2. **Framework Preset:** Vite
-3. **Build Command:** `npm run build` (auto-detected)
-4. **Output Directory:** `dist`
-5. **Environment Variables:** Add `VITE_API_URL=https://hms-liberia-api.onrender.com`
-6. **Deploy**
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `DATABASE_URL` | ✅ auto | Injected by Neon from the branch — do not set in `.env.neon` unless overriding |
+| `DB_TYPE` | ✅ | Set to `postgres` in `neon.ts` |
+| `JWT_SECRET` | ✅ | From `.env.neon` at deploy time |
+| `CORS_ORIGIN` | ✅ | Exact Vercel origin, no trailing slash |
+| `JWT_EXPIRES_IN` | | Default `8h` |
+| `LRD_PER_USD` | | Default `193.5` |
 
-The `vercel.json` rewrite rule handles React Router SPA routing.
+### Vercel (frontend)
 
----
-
-## 5. Network Compatibility (Orange, Lonestar, MTN Liberia)
-
-- Both **Vercel** and **Render** serve over **HTTPS on standard ports (443)**.
-- No custom ports, no WebSockets required for core features.
-- Works on **all Liberian mobile networks** (Orange Liberia, Lonestar, MTN Liberia) and fixed broadband.
-- If you hit corporate firewall issues: both providers support custom domains (e.g., `api.hospital.gov.lr`, `hospital.gov.lr`).
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `VITE_API_URL` | ✅ | Neon Function invocation origin |
 
 ---
 
-## 6. Manual DB Initialization (if needed)
+## 5. Repo layout (Neon-related)
 
-```bash
-# In Render backend service → Shell
-node scripts/init-db-postgres.js
+```
+neon.ts                      # Backend-as-code: Function `api` + branch policy
+backend/functions/api.js     # Neon fetch entry (Express via fetch-adapter)
+backend/app.js               # Express app (shared)
+backend/server.js            # Local / legacy long-running listen
+.env.neon.example            # Template for JWT_SECRET + CORS_ORIGIN
+frontend/vercel.json         # SPA rewrites
 ```
 
-This is idempotent — safe to run multiple times.
-
 ---
 
-## 7. Environment Variables Reference
-
-### Backend (Render)
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | ✅ | From Render Postgres (auto via Blueprint) |
-| `DB_TYPE` | ✅ | `postgres` (set in Blueprint) |
-| `JWT_SECRET` | ✅ | Auto-generated in Blueprint |
-| `CORS_ORIGIN` | ✅ | Frontend URL (set manually after deploy) |
-| `NODE_ENV` | | `production` (set in Blueprint) |
-| `PORT` | | Render sets automatically (default 3000) |
-
-### Frontend (Vercel or Render)
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_API_URL` | ✅ | Backend URL, e.g. `https://hms-liberia-api.onrender.com` |
-
----
-
-## 8. Common Issues
+## 6. Common issues
 
 | Symptom | Fix |
 |---------|-----|
-| `CORS error` in browser | Ensure `CORS_ORIGIN` on backend matches frontend URL **exactly** (no trailing slash) |
-| `404 on /dashboard` (Vercel) | Verify `vercel.json` has the rewrite rule |
-| `relation "public_appointments" does not exist` | Run `node scripts/init-db-postgres.js` in backend shell |
-| `JWT_SECRET not set` | Blueprint generates it; if missing, add a random 32+ char string |
-| Frontend shows old API URL | Redeploy frontend after setting `VITE_API_URL` |
+| CORS error | `CORS_ORIGIN` must match the Vercel URL exactly; redeploy the function |
+| `404` on `/dashboard` | Confirm `frontend/vercel.json` rewrite; Root Directory = `frontend` |
+| `relation … does not exist` | Run `node backend/scripts/init-db-postgres.js` with Neon `DATABASE_URL` |
+| Function build fails on `sql.js` | Deploy uses Postgres-only entry; ensure `DB_TYPE=postgres` |
+| Empty `JWT_SECRET` after deploy | Set it in `.env.neon` and run `neon deploy --env .env.neon` again |
+| Frontend still hits Render | Update `VITE_API_URL` on Vercel and **redeploy** the frontend |
 
 ---
 
-## 9. Production Hardening (Recommended)
+## 7. Network notes (Liberia: Orange, Lonestar, MTN)
 
-- Move to **paid Render plans** for: persistent DB, no spin-down, custom domains, more CPU/RAM
-- Add **custom domain** on Render → `api.yourhospital.org` and on Vercel → `yourhospital.org`
-- Enable **Render managed TLS** (automatic) or bring your own cert
-- Set up **Render cron job** for nightly DB backup (paid plans)
-- Configure **Vercel preview deployments** for PR reviews
+- Vercel and Neon Functions both serve **HTTPS on port 443**
+- No custom ports required for core features
+- Optional: custom domains — Vercel for the UI, [Neon Function custom domains](https://neon.com/docs/compute/functions/custom-domains) for the API
 
 ---
 
-## 10. Quick Commands
+## 8. Production hardening
+
+- Protect the default Neon branch; raise compute limits in `neon.ts` when traffic grows  
+- Strong unique `JWT_SECRET`; rotate if leaked  
+- Neon branching for PR previews (`neon checkout`) + point preview `VITE_API_URL` at the preview function URL  
+- Snapshots / restore for recovery  
+- Optional: retire Render services once Neon + Vercel are stable  
+
+---
+
+## 9. Quick commands
 
 ```bash
-# Local dev (SQLite)
-cd backend && DB_TYPE=sqlite npm start
-cd frontend && npm run dev
+# Local UI + local API against Neon DB
+neon env pull --file .env.neon.local
+# terminal 1
+neon dev
+# terminal 2
+cd frontend && VITE_API_URL=http://localhost:8787 npm run dev
 
-# Local dev (PostgreSQL via Docker)
-docker run --name pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=hospital -p 5432:5432 -d postgres
-cd backend && DATABASE_URL=postgres://postgres:postgres@localhost:5432/hospital DB_TYPE=postgres npm start
+# Local API process (non-Function) against Neon Postgres
+cd backend && DATABASE_URL="…" DB_TYPE=postgres npm start
 
-# Production deploy via Blueprint
-# Just push to main — Render auto-deploys (if "Auto-Deploy" enabled in service settings)
+# Production
+neon deploy --env .env.neon
+# Then set VITE_API_URL on Vercel to the function invocation_url and redeploy
 ```
