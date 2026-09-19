@@ -99,14 +99,17 @@ function toReqRes(request) {
 function toFetchResponse(res) {
   return new Promise((resolve, reject) => {
     const finish = () => {
+      const status = Number(res._status || res.statusCode || 200);
       const headers = new Headers();
       for (const [k, v] of Object.entries(res._headerMap || {})) {
         if (v == null) continue;
         if (Array.isArray(v)) v.forEach((item) => headers.append(k, String(item)));
         else headers.set(k, String(v));
       }
-      const body = Buffer.concat(res._chunks || []);
-      resolve(new Response(body, { status: res._status || res.statusCode || 200, headers }));
+      // Fetch forbids a body on null-body statuses (CORS preflight uses 204).
+      const nullBody = status === 204 || status === 205 || status === 304;
+      const body = nullBody ? null : Buffer.concat(res._chunks || []);
+      resolve(new Response(body, { status, headers }));
     };
 
     if (res._finished) finish();

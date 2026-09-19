@@ -39,12 +39,17 @@ const uhpcmsPublic = require('./routes/uhpcms-public');
 
 const app = express();
 
-const corsOpts = config.corsOrigin === true
-  ? {}
-  : Array.isArray(config.corsOrigin)
-    ? { origin: config.corsOrigin }
-    : { origin: config.corsOrigin };
+const corsOpts = {
+  ...(config.corsOrigin === true
+    ? {}
+    : Array.isArray(config.corsOrigin)
+      ? { origin: config.corsOrigin }
+      : { origin: config.corsOrigin }),
+  // Neon Fetch Response rejects body on 204; cors default preflight is 204.
+  optionsSuccessStatus: 200,
+};
 app.use(cors(corsOpts));
+app.options('*', cors(corsOpts));
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
